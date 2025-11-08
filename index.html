@@ -106,6 +106,7 @@
                     background-position: 100% 100%;
                 }
             }
+
         }
     </style>
 </head>
@@ -123,6 +124,8 @@
     <!-- 雪花容器 -->
     <div id="snow-container" class="fixed inset-0 z-10 pointer-events-none"></div>
     
+
+
     <!-- 主内容 -->
     <div class="relative z-20 flex flex-col items-center justify-center min-h-screen text-white p-4">
         <div class="bg-blur bg-black/30 p-6 md:p-8 rounded-2xl shadow-xl max-w-2xl w-full">
@@ -291,6 +294,18 @@
         
         // 创建祝福弹窗
         function createBlessingPopup() {
+            // 限制同时存在的弹窗数量
+            const maxPopups = isMobile ? 5 : 8;
+            const currentPopups = document.querySelectorAll('.popup');
+            
+            // 如果已达到最大弹窗数量，则不再创建新弹窗
+            if (currentPopups.length >= maxPopups) {
+                // 移除最旧的弹窗以保持动态效果
+                const oldestPopup = currentPopups[0];
+                oldestPopup.style.opacity = '0';
+                setTimeout(() => oldestPopup.remove(), 500);
+            }
+            
             const popup = document.createElement('div');
             popup.className = 'popup';
             
@@ -318,8 +333,17 @@
             // 随机位置 - 确保不会超出屏幕
             const popupWidth = isMobile ? 220 : 280;
             const popupHeight = isMobile ? 100 : 120;
-            const left = Math.random() * (window.innerWidth - popupWidth);
-            const top = Math.random() * (window.innerHeight - popupHeight);
+            let left, top;
+            let attempts = 0;
+            const maxAttempts = 5;
+            
+            // 尝试找到不重叠的位置
+            do {
+                left = Math.random() * (window.innerWidth - popupWidth);
+                top = Math.random() * (window.innerHeight - popupHeight);
+                attempts++;
+            } while (attempts < maxAttempts && isPositionOverlapping(left, top, popupWidth, popupHeight));
+            
             popup.style.left = `${left}px`;
             popup.style.top = `${top}px`;
             
@@ -332,10 +356,10 @@
             popup.style.transform += ` rotate(${rotation}deg)`;
             
             // 增加z-index
-            popup.style.zIndex = 1000 + document.querySelectorAll('.popup').length;
+            popup.style.zIndex = 1000 + currentPopups.length;
             
             // 添加触摸反馈效果
-            popup.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
+            popup.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease, opacity 0.5s ease';
             popup.addEventListener('touchstart', function() {
                 this.style.transform = `scale(${scale * 1.15}) rotate(${rotation}deg)`;
                 this.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.3), 0 0 20px rgba(236, 72, 153, 0.4)';
@@ -347,8 +371,9 @@
             });
             
             popup.addEventListener('mouseenter', function() {
-                this.style.transform = `scale(${scale * 1.25}) rotate(${rotation}deg)`;
-                this.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.3), 0 0 20px rgba(236, 72, 153, 0.4)';
+                // 增加鼠标悬停放大效果，使用更大的放大倍数
+                this.style.transform = `scale(${scale * 1.35}) rotate(${rotation}deg)`;
+                this.style.boxShadow = '0 15px 45px rgba(0, 0, 0, 0.35), 0 0 25px rgba(236, 72, 153, 0.5)';
             });
             
             popup.addEventListener('mouseleave', function() {
@@ -356,20 +381,55 @@
                 this.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.25), 0 0 15px rgba(236, 72, 153, 0.3)';
             });
             
+            // 点击弹窗时移除它
+            popup.addEventListener('click', function() {
+                this.style.opacity = '0';
+                setTimeout(() => this.remove(), 500);
+            });
+            
             document.body.appendChild(popup);
             
-            // 移动端弹窗自动移除，避免过多弹窗影响体验
-            if (isMobile) {
-                setTimeout(() => {
-                    popup.style.opacity = '0';
-                    setTimeout(() => popup.remove(), 500);
-                }, 5000);
-            }
+            // 所有设备上都添加自动移除逻辑，移动端5秒，桌面端8秒
+            const autoRemoveTime = isMobile ? 5000 : 8000;
+            setTimeout(() => {
+                popup.style.opacity = '0';
+                setTimeout(() => popup.remove(), 500);
+            }, autoRemoveTime);
         }
         
-        // 定期创建祝福弹窗 - 优化移动端频率
+        // 检查新弹窗位置是否与现有弹窗重叠
+        function isPositionOverlapping(newLeft, newTop, newWidth, newHeight) {
+            const existingPopups = document.querySelectorAll('.popup');
+            const margin = 20; // 允许的最小间距
+            
+            for (const popup of existingPopups) {
+                const rect = popup.getBoundingClientRect();
+                
+                // 检查是否重叠
+                if (!(newLeft > rect.right + margin || 
+                      newLeft + newWidth + margin < rect.left || 
+                      newTop > rect.bottom + margin || 
+                      newTop + newHeight + margin < rect.top)) {
+                    return true; // 重叠
+                }
+            }
+            return false; // 不重叠
+        }
+        
+
+        
+        // 定期创建祝福弹窗 - 优化频率和性能
         setTimeout(() => {
-            setInterval(createBlessingPopup, isMobile ? 3000 : 1000);
+            setInterval(() => {
+                // 动态调整创建频率，当弹窗数量接近上限时降低创建频率
+                const currentPopups = document.querySelectorAll('.popup');
+                const maxPopups = isMobile ? 5 : 10;
+                
+                // 只有当弹窗数量少于最大数量的70%时才创建新弹窗
+                if (currentPopups.length < maxPopups * 0.7) {
+                    createBlessingPopup();
+                }
+            }, isMobile ? 4000 : 2000); // 稍微降低创建频率
         }, 3000);
         
         // 页面加载时生成初始雪花 - 移动端减少数量
